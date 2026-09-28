@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import React from "react";
 import { Barcode, Camera, CameraOff, Minus, Plus, Search } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
+import { useReactToPrint } from "react-to-print"; // <-- 1. استدعاء مكتبة الطباعة
 
 type Tab = "categories" | "quantities";
 
@@ -84,7 +86,11 @@ function BarcodeScanner({
           aria-label={isScanning ? "إيقاف ماسح الباركود" : "فتح ماسح الباركود"}
           title={isScanning ? "إيقاف الماسح" : "مسح بالكاميرا"}
         >
-          {isScanning ? <CameraOff aria-hidden="true" /> : <Camera aria-hidden="true" />}
+          {isScanning ? (
+            <CameraOff aria-hidden="true" />
+          ) : (
+            <Camera aria-hidden="true" />
+          )}
         </button>
       </div>
       <div
@@ -101,6 +107,29 @@ function BarcodeScanner({
   );
 }
 
+type PrintCardProps = {
+  name: string;
+  barcode: string;
+};
+
+const PrintCard = React.forwardRef<HTMLDivElement, PrintCardProps>(
+  ({ name, barcode }, ref) => {
+    return (
+      <div
+        ref={ref}
+        className="print-card-box"
+        style={{ padding: "15px", textAlign: "center", fontFamily: "Arial" }}
+      >
+        <p style={{ fontSize: "14px", marginBottom: "5px" }}>
+          الكود: <strong>{barcode}</strong>
+        </p>
+        <h3 style={{ fontSize: "16px", marginBottom: "8px" }}>{name}</h3>
+      </div>
+    );
+  },
+);
+PrintCard.displayName = "PrintCard";
+
 const tabs: { id: Tab; label: string }[] = [
   { id: "categories", label: "الأصناف" },
   { id: "quantities", label: "تسجيل كميات" },
@@ -112,16 +141,45 @@ export default function Page() {
   const [barcode, setBarcode] = useState("");
   const [quantityBarcode, setQuantityBarcode] = useState("");
   const [quantitySearch, setQuantitySearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(
+    null,
+  );
   const [name, setName] = useState("");
   const [search, setSearch] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [savedRecords, setSavedRecords] = useState<SavedRecord[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
 
+  // <-- 3. State لآخر صنف تم إضافته لطباعته تلقائياً -->
+  const [latestPrintedItem, setLatestPrintedItem] = useState<{
+    name: string;
+    barcode: string;
+    quantity: number;
+  }>({
+    name: "",
+    barcode: "",
+    quantity: 1,
+  });
+
+  const cardComponentRef = useRef<HTMLDivElement>(null);
+
+  const handlePrintCard = useReactToPrint({
+    contentRef: cardComponentRef,
+    documentTitle: `Barcode-${latestPrintedItem.barcode}`,
+    onBeforePrint: () => {
+      document.body.classList.add("printing-barcode");
+      return Promise.resolve();
+    },
+    onAfterPrint: () => {
+      document.body.classList.remove("printing-barcode");
+    },
+  });
+
   useEffect(() => {
     try {
-      const savedCategories = window.localStorage.getItem("makhzani-categories");
+      const savedCategories = window.localStorage.getItem(
+        "makhzani-categories",
+      );
       const savedRecordsValue = window.localStorage.getItem("makhzani-records");
       if (savedCategories) setCategories(JSON.parse(savedCategories));
       if (savedRecordsValue) setSavedRecords(JSON.parse(savedRecordsValue));
@@ -134,13 +192,21 @@ export default function Page() {
 
   useEffect(() => {
     if (isHydrated) {
-      window.localStorage.setItem("makhzani-categories", JSON.stringify(categories));
-      window.localStorage.setItem("makhzani-records", JSON.stringify(savedRecords));
+      window.localStorage.setItem(
+        "makhzani-categories",
+        JSON.stringify(categories),
+      );
+      window.localStorage.setItem(
+        "makhzani-records",
+        JSON.stringify(savedRecords),
+      );
     }
   }, [categories, savedRecords, isHydrated]);
 
   useEffect(() => {
-    const matchedCategory = categories.find((item) => item.barcode === quantityBarcode);
+    const matchedCategory = categories.find(
+      (item) => item.barcode === quantityBarcode,
+    );
     if (matchedCategory) {
       setSelectedCategory(matchedCategory);
       setQuantitySearch(matchedCategory.name);
@@ -161,7 +227,9 @@ export default function Page() {
     const query = quantitySearch.trim().toLocaleLowerCase("ar");
     if (!query || selectedCategory) return [];
     return categories
-      .filter((item) => `${item.barcode} ${item.name}`.toLocaleLowerCase("ar").includes(query))
+      .filter((item) =>
+        `${item.barcode} ${item.name}`.toLocaleLowerCase("ar").includes(query),
+      )
       .slice(0, 6);
   }, [categories, quantitySearch, selectedCategory]);
 
@@ -174,39 +242,57 @@ export default function Page() {
   function addCategory() {
     const nextBarcode = barcode.trim();
     const nextName = name.trim();
-    if (!nextBarcode || !nextName || categories.some((item) => item.barcode === nextBarcode)) return;
-    setCategories((items) => [...items, { barcode: nextBarcode, name: nextName }]);
+    if (
+      !nextBarcode ||
+      !nextName ||
+      categories.some((item) => item.barcode === nextBarcode)
+    )
+      return;
+    setCategories((items) => [
+      ...items,
+      { barcode: nextBarcode, name: nextName },
+    ]);
     setBarcode("");
     setName("");
   }
 
   function removeCategory(barcodeToRemove: string) {
-    setCategories((items) => items.filter((item) => item.barcode !== barcodeToRemove));
+    setCategories((items) =>
+      items.filter((item) => item.barcode !== barcodeToRemove),
+    );
   }
 
+  // <-- 4. تحديث دالة addStatementItem لتقوم بالحفظ والطباعة الفورية معاً -->
   function addStatementItem() {
     if (!selectedCategory) return;
 
-    const date = new Intl.DateTimeFormat("ar-EG", { dateStyle: "medium" }).format(new Date());
+    const date = new Intl.DateTimeFormat("ar-EG", {
+      dateStyle: "medium",
+    }).format(new Date());
+    const currentCategory = selectedCategory;
+    const currentQuantity = quantity;
 
     setSavedRecords((records) => {
       const otherDaysRecords = records.filter((record) => record.date !== date);
-      const todayExistingRecords = records.filter((record) => record.date === date);
+      const todayExistingRecords = records.filter(
+        (record) => record.date === date,
+      );
 
       let updatedTodayRecords = [...todayExistingRecords];
       const existingIndex = updatedTodayRecords.findIndex(
-        (r) => r.barcode === selectedCategory.barcode
+        (r) => r.barcode === currentCategory.barcode,
       );
 
       if (existingIndex > -1) {
         updatedTodayRecords[existingIndex] = {
           ...updatedTodayRecords[existingIndex],
-          quantity: updatedTodayRecords[existingIndex].quantity + quantity,
+          quantity:
+            updatedTodayRecords[existingIndex].quantity + currentQuantity,
         };
       } else {
         updatedTodayRecords.push({
-          ...selectedCategory,
-          quantity,
+          ...currentCategory,
+          quantity: currentQuantity,
           date,
           statementNumber: records.length + 1,
         });
@@ -214,6 +300,17 @@ export default function Page() {
 
       return [...updatedTodayRecords, ...otherDaysRecords];
     });
+
+    // تحديث بيانات الكارت المراد طباعته واستدعاء أمر الطباعة الفوري
+    setLatestPrintedItem({
+      name: currentCategory.name,
+      barcode: currentCategory.barcode,
+      quantity: currentQuantity,
+    });
+
+    setTimeout(() => {
+      handlePrintCard();
+    }, 250);
 
     setQuantity(1);
     setSelectedCategory(null);
@@ -223,7 +320,10 @@ export default function Page() {
 
   function deleteSavedRecord(barcodeToDelete: string, recordDate: string) {
     setSavedRecords((records) =>
-      records.filter((record) => !(record.barcode === barcodeToDelete && record.date === recordDate))
+      records.filter(
+        (record) =>
+          !(record.barcode === barcodeToDelete && record.date === recordDate),
+      ),
     );
   }
 
@@ -231,26 +331,34 @@ export default function Page() {
     window.print();
   }
 
-  const todayDate = new Intl.DateTimeFormat("ar-EG", { dateStyle: "medium" }).format(new Date());
-  const todayRecords = savedRecords.filter((record) => record.date === todayDate);
+  const todayDate = new Intl.DateTimeFormat("ar-EG", {
+    dateStyle: "medium",
+  }).format(new Date());
+  const todayRecords = savedRecords.filter(
+    (record) => record.date === todayDate,
+  );
 
   return (
     <main dir="rtl" className="app-shell">
       <header className="topbar">
         <div className="brand-row">
           <div className="brand-mark" aria-hidden="true">
-            <span /><span /><span /><span />
+            <span />
+            <span />
+            <span />
+            <span />
           </div>
           <h1>مصنعي</h1>
         </div>
-        <time dateTime={new Date().toISOString().split('T')[0]}>
-          {new Date().toLocaleDateString('ar-EG', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
+        <time dateTime={new Date().toISOString().split("T")[0]}>
+          {new Date().toLocaleDateString("ar-EG", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
           })}
-        </time>      </header>
+        </time>{" "}
+      </header>
 
       <nav className="tabs" aria-label="التنقل الرئيسي">
         {tabs.map((tab) => (
@@ -300,7 +408,9 @@ export default function Page() {
               />
             </div>
             {filteredCategories.length === 0 ? (
-              <p className="empty-state">لا توجد أصناف بعد. أضف أول صنف من النموذج.</p>
+              <p className="empty-state">
+                لا توجد أصناف بعد. أضف أول صنف من النموذج.
+              </p>
             ) : (
               filteredCategories.map((item) => (
                 <div className="table-row" key={item.barcode}>
@@ -351,7 +461,11 @@ export default function Page() {
                 />
               </div>
               {quantityMatches.length > 0 && (
-                <div className="category-suggestions" role="listbox" aria-label="نتائج الأصناف">
+                <div
+                  className="category-suggestions"
+                  role="listbox"
+                  aria-label="نتائج الأصناف"
+                >
                   {quantityMatches.map((category) => (
                     <button
                       type="button"
@@ -424,7 +538,7 @@ export default function Page() {
               </button>
             </div>
             <button className="primary-button" onClick={addStatementItem}>
-              إضافة للبيان و احفظ
+              اضافة
             </button>
           </section>
           <section className="category-list">
@@ -440,13 +554,18 @@ export default function Page() {
               <p className="empty-state">لم تضف أي صنف بعد.</p>
             ) : (
               <div className="statement-table quantity-items-table">
-
                 <div className="print-header-container">
                   <div className="print-title">بيان انتاج المصنع</div>
                   <div className="print-meta">
                     <span>التاريخ: {todayDate}</span>
                     <span>عدد الأصناف: {todayRecords.length}</span>
-                    <span>إجمالي الكمية: {todayRecords.reduce((total, item) => total + item.quantity, 0)}</span>
+                    <span>
+                      إجمالي الكمية:{" "}
+                      {todayRecords.reduce(
+                        (total, item) => total + item.quantity,
+                        0,
+                      )}
+                    </span>
                   </div>
                 </div>
 
@@ -473,13 +592,21 @@ export default function Page() {
             )}
             <div className="action">
               <button className="primary-button" onClick={handlePrint}>
-                طباعة
+                طباعة البيان بالكامل
               </button>
             </div>
           </section>
         </section>
       )}
 
+      {/* <-- 5. عنصر الكارت المخفي لتنفيذ أمر الطباعة الفورية للصنف المضاف حديثاً --> */}
+      <div className="print-card-wrapper">
+        <PrintCard
+          ref={cardComponentRef}
+          name={latestPrintedItem.name}
+          barcode={latestPrintedItem.barcode}
+        />
+      </div>
     </main>
   );
 }
