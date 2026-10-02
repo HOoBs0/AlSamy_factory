@@ -949,34 +949,33 @@
 }
 
 /* إخفاء كارت الباركود في الشاشة العادية */
-.print-card-wrapper {
+#print-card-wrapper {
   display: none;
 }
 
 /* تنسيق صندوق كارت الباركود */
-.print-card-box {
+#print-card-box {
   width: 100%;
-  max-width: 50mm;
+  max-width: 80mm;
   margin: 0 auto;
   padding: 15px;
   text-align: center;
   font-family: Arial, sans-serif;
   background: #ffffff;
   color: #000000;
+  border: 5px solid #000000;
 }
 
-.print-card-box h3 {
+#print-card-box h3 {
   font-size: 24px;
-  font-weight: bold;
+  font-weight: bolder;
   margin-bottom: 8px;
   margin-top: 0;
 }
 
-.print-card-box p {
+#print-card-box p {
   font-size: 24px;
-  font-weight: bold;
-  margin-bottom: 5px;
-  margin-top: 0;
+  font-weight: bolder;
 }
 
 /* تنسيقات خاصة عند الطباعة الحرارية */
@@ -990,12 +989,12 @@
     visibility: hidden !important;
   }
 
-  .print-card-box,
-  .print-card-box * {
+  #print-card-box,
+  #print-card-box * {
     visibility: visible !important;
   }
 
-  .print-card-box {
+  #print-card-box {
     position: absolute !important;
     top: 0 !important;
     left: 0 !important;

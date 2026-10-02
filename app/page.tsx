@@ -117,13 +117,13 @@ const PrintCard = React.forwardRef<HTMLDivElement, PrintCardProps>(
     return (
       <div
         ref={ref}
-        className="print-card-box"
+        id="print-card-box"
         style={{ padding: "15px", textAlign: "center", fontFamily: "Arial" }}
       >
-        <p style={{ fontSize: "14px", marginBottom: "5px" }}>
-          الكود: <strong>{barcode}</strong>
+        <p>
+          الكود ( <strong>{barcode}</strong> )
         </p>
-        <h3 style={{ fontSize: "16px", marginBottom: "8px" }}>{name}</h3>
+        <h3>{name}</h3>
       </div>
     );
   },
@@ -600,7 +600,7 @@ export default function Page() {
       )}
 
       {/* <-- 5. عنصر الكارت المخفي لتنفيذ أمر الطباعة الفورية للصنف المضاف حديثاً --> */}
-      <div className="print-card-wrapper">
+      <div id="print-card-wrapper">
         <PrintCard
           ref={cardComponentRef}
           name={latestPrintedItem.name}
