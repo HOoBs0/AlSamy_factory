@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import React from "react";
 import { Barcode, Camera, CameraOff, Minus, Plus, Search } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { useReactToPrint } from "react-to-print"; // <-- 1. استدعاء مكتبة الطباعة
@@ -9,7 +8,9 @@ import { useReactToPrint } from "react-to-print"; // <-- 1. استدعاء مك�
 type Tab = "categories" | "quantities";
 
 type Category = {
-  code: string; barcode: string; name: string 
+  code: string;
+  barcode: string;
+  name: string;
 };
 type StatementItem = { barcode: string; name: string; quantity: number };
 type SavedRecord = StatementItem & { date: string; statementNumber: number };
@@ -108,29 +109,6 @@ function BarcodeScanner({
     </div>
   );
 }
-
-type PrintCardProps = {
-  name: string;
-  barcode: string;
-};
-
-const PrintCard = React.forwardRef<HTMLDivElement, PrintCardProps>(
-  ({ name, barcode }, ref) => {
-    return (
-      <div
-        ref={ref}
-        id="print-card-box"
-        style={{ padding: "15px", textAlign: "center", fontFamily: "Arial" }}
-      >
-        <p>
-          الكود ( <strong>{barcode}</strong> )
-        </p>
-        <h3>{name}</h3>
-      </div>
-    );
-  },
-);
-PrintCard.displayName = "PrintCard";
 
 const tabs: { id: Tab; label: string }[] = [
   { id: "categories", label: "الأصناف" },
@@ -262,8 +240,7 @@ export default function Page() {
     );
   }
 
-  // <-- 4. تحديث دالة addStatementItem لتقوم بالحفظ والطباعة الفورية معاً -->
-function addStatementItem() {
+  function addStatementItem() {
     if (!selectedCategory) return;
 
     const date = new Intl.DateTimeFormat("ar-EG", {
@@ -301,7 +278,7 @@ function addStatementItem() {
       return [...updatedTodayRecords, ...otherDaysRecords];
     });
 
-    // الطريقة الاحترافية للطباعة الفورية المضمونة على الموبايل
+    // فتح نافذة منبثقة للطباعة بالتنسيقات الخاصة بك
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (printWindow) {
       printWindow.document.write(`
@@ -309,34 +286,43 @@ function addStatementItem() {
           <head>
             <title>طباعة كارت صنف</title>
             <style>
-              @page {
-                size: 8cm auto;
-                margin: 0;
-              }
-              body {
-                width: 8cm;
-                margin: 0;
-                padding: 5px;
-                font-family: Arial, sans-serif;
-                text-align: center;
-              }
-              .print-card {
-                padding: 10px;
-                border: 1px dashed #000;
-                display: inline-block;
+              /* تنسيقات صندوق كارت الباركود الخاصة بك */
+              #print-card-box {
                 width: 100%;
+                max-width: 80mm;
+                margin: 0 auto;
+                padding: 15px;
+                text-align: center;
+                font-family: Arial, sans-serif;
+                background: #ffffff;
+                color: #000000;
+                border: 5px solid #000000;
                 box-sizing: border-box;
               }
-              h3, h4 {
-                margin: 5px 0;
+
+              #print-card-box h3 {
+                font-size: 24px;
+                font-weight: bolder;
+                margin-bottom: 8px;
+                margin-top: 0;
+              }
+
+              @page {
+                size: 80mm auto;
+                margin: 0mm;
+              }
+
+              body {
+                margin: 0;
+                padding: 0;
+                background: #fff;
               }
             </style>
           </head>
           <body>
-            <div class="print-card">
-              <h4>الكود: ${currentCategory.barcode || currentCategory.code || ''}</h4>
+            <div id="print-card-box">
+              <h3>الكود ( ${currentCategory.barcode || currentCategory.code || ''} )</h3>
               <h3>${currentCategory.name}</h3>
-              <p>الكمية: ${currentQuantity}</p>
             </div>
             <script>
               window.onload = function() {
@@ -638,15 +624,6 @@ function addStatementItem() {
           </section>
         </section>
       )}
-
-      {/* <-- 5. عنصر الكارت المخفي لتنفيذ أمر الطباعة الفورية للصنف المضاف حديثاً --> */}
-      <div id="print-card-wrapper">
-        <PrintCard
-          ref={cardComponentRef}
-          name={latestPrintedItem.name}
-          barcode={latestPrintedItem.barcode}
-        />
-      </div>
     </main>
   );
 }
