@@ -8,7 +8,9 @@ import { useReactToPrint } from "react-to-print"; // <-- 1. استدعاء مك�
 
 type Tab = "categories" | "quantities";
 
-type Category = { barcode: string; name: string };
+type Category = {
+  code: string; barcode: string; name: string 
+};
 type StatementItem = { barcode: string; name: string; quantity: number };
 type SavedRecord = StatementItem & { date: string; statementNumber: number };
 
@@ -154,11 +156,9 @@ export default function Page() {
   const [latestPrintedItem, setLatestPrintedItem] = useState<{
     name: string;
     barcode: string;
-    quantity: number;
   }>({
     name: "",
     barcode: "",
-    quantity: 1,
   });
 
   const cardComponentRef = useRef<HTMLDivElement>(null);
@@ -263,7 +263,7 @@ export default function Page() {
   }
 
   // <-- 4. تحديث دالة addStatementItem لتقوم بالحفظ والطباعة الفورية معاً -->
-  function addStatementItem() {
+function addStatementItem() {
     if (!selectedCategory) return;
 
     const date = new Intl.DateTimeFormat("ar-EG", {
@@ -301,16 +301,56 @@ export default function Page() {
       return [...updatedTodayRecords, ...otherDaysRecords];
     });
 
-    // تحديث بيانات الكارت المراد طباعته واستدعاء أمر الطباعة الفوري
-    setLatestPrintedItem({
-      name: currentCategory.name,
-      barcode: currentCategory.barcode,
-      quantity: currentQuantity,
-    });
-
-    setTimeout(() => {
-      handlePrintCard();
-    }, 250);
+    // الطريقة الاحترافية للطباعة الفورية المضمونة على الموبايل
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html dir="rtl">
+          <head>
+            <title>طباعة كارت صنف</title>
+            <style>
+              @page {
+                size: 8cm auto;
+                margin: 0;
+              }
+              body {
+                width: 8cm;
+                margin: 0;
+                padding: 5px;
+                font-family: Arial, sans-serif;
+                text-align: center;
+              }
+              .print-card {
+                padding: 10px;
+                border: 1px dashed #000;
+                display: inline-block;
+                width: 100%;
+                box-sizing: border-box;
+              }
+              h3, h4 {
+                margin: 5px 0;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="print-card">
+              <h4>الكود: ${currentCategory.barcode || currentCategory.code || ''}</h4>
+              <h3>${currentCategory.name}</h3>
+              <p>الكمية: ${currentQuantity}</p>
+            </div>
+            <script>
+              window.onload = function() {
+                setTimeout(() => {
+                  window.print();
+                  window.close();
+                }, 300);
+              };
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
 
     setQuantity(1);
     setSelectedCategory(null);
